@@ -1,0 +1,105 @@
+#!/bin/bash
+# kullanıcı tarafından secilen inputları saklar
+INPUT=/tmp/menu.sh.$$
+
+# outputları saklar
+OUTPUT=/tmp/output.sh.$$
+
+# trap ile temp dosyalarını siler
+#trap "rm $OUTPUT; rm $INPUT; exit" SIGHUP SIGINT SIGTERM
+
+#ekrana basılacaklar için
+function display_output(){
+	local h=${1-10}				# box height
+	local w=${2-41} 			# box width
+	local t=${3-Output} 	# box baslik
+	dialog --backtitle "Journal Application by berkaycit" --title "${t}" --clear --msgbox "$(<$OUTPUT)" ${h} ${w}
+}
+
+#journal ın saklanacağı klasörü oluştur
+function create_file() {
+	file=journaldir
+	if [ ! -e "$file" ] ; then
+    mkdir ~/"$file"
+	fi
+
+	write_text
+}
+
+#decrypt edileni sil
+function delete_file(){
+	if [ -e "${FILEJOURNEY%.[^.]*}" ] ; then
+	  rm "${FILEJOURNEY%.[^.]*}"
+	fi
+}
+
+#journal i oku
+function read_file(){
+	dialog --textbox "${FILEJOURNEY%.[^.]*}" 20 80
+}
+
+#dosyayı seç
+function select_file(){
+	delete_file
+	FILEJOURNEY=$(dialog --title "Read your journal" --stdout --title "Please choose a file to read" --fselect ~/journaldir/ 14 48)
+	openssl des3 -d -salt -in "$FILEJOURNEY" -out "${FILEJOURNEY%.[^.]*}"
+	read_file
+}
+
+#dosyayı şifrele
+function encrypt_text(){
+		openssl des3 -salt -in ~/journaldir/"${USERDATE///}.txt" -out ~/journaldir/"${USERDATE///}.des3"
+		rm ~/journaldir/"${USERDATE///}.txt"
+}
+
+#journal yaz
+function write_text(){
+	dialog --title "Journal" \
+	--backtitle "Journal Application by berkaycit" \
+	--inputbox "Write your journal " 80 160 2>~/journaldir/"${USERDATE///}.txt"
+	encrypt_text
+}
+
+#jorunal için gün seç
+function pick_from_cal(){
+	DIALOG=${DIALOG=dialog}
+
+	USERDATE=`$DIALOG --stdout --title "CALENDAR" --calendar "Please choose a date..." 0 0 7 7 2018`
+
+	case $? in
+	  0)
+	    create_file;;
+	  1)
+	    echo "Cancel pressed.";;
+	  255)
+	    echo "Box closed.";;
+	esac
+}
+
+while true
+do
+
+### anamenü ###
+dialog --clear  --help-button --backtitle "Journal Application by berkaycit" \
+--title "[ M A I N - M E N U ]" \
+--menu "You can use arrow keys \n\
+and 1-9 numbers to control.\n\
+with TAB you can switch between tasks" 15 50 4 \
+Create "Create a new journal" \
+Show "Show your journals" \
+Exit "Exit to the shell" 2>"${INPUT}"
+
+menuitem=$(<"${INPUT}")
+
+# seçim
+case $menuitem in
+	Create) pick_from_cal;;
+	Show) select_file;;
+	Exit) clear; break;;
+esac
+
+done
+
+# temp file varsa silisinsin
+#[ -f $OUTPUT ] && rm $OUTPUT
+#[ -f $INPUT ] && rm $INPUT
